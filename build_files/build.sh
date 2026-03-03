@@ -28,17 +28,20 @@ systemctl enable podman.socket sshd
 # Guacamole (dnf5 + build from source, BEFORE rpm-ostree)
 dnf5 install -y gcc cairo-devel libjpeg-turbo-devel libpng-devel libuuid-devel \
   freerdp-devel libssh2-devel libtelnet-devel libvncserver-devel pango-devel \
-  openssl-devel libtool libwebsockets-devel libpng-devel libvorbis-devel
+  openssl-devel libtool libwebsockets-devel libpng-devel libvorbis-devel \
+  autoconf automake libtool git gcc make
 
 # Download + build guacamole-server
 cd /tmp
-wget https://archive.apache.org/dist/guacamole/1.6.0/source/guacamole-server-1.6.0.tar.gz
-tar -xzf guacamole-server-1.6.0.tar.gz
-cd guacamole-server-1.6.0
+rm -rf guacamole-server
+git clone https://github.com/apache/guacamole-server.git
+cd guacamole-server/
+autoreconf -fi
 ./configure --with-systemd-dir=/usr/lib/systemd/system
 make
 make install
 ldconfig
+
 
 # Common installs
 rpm-ostree install tailscale cockpit-system cockpit-ostree cockpit-podman nginx bind-utils procps-ng fcgiwrap jq tomcat
