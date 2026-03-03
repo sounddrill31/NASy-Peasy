@@ -21,13 +21,11 @@ dnf5 install -y tmux openssh-server
 
 #### Example for enabling a System Unit File
 
-systemctl enable podman.socket
+systemctl enable podman.socket sshd
 
-# SSH setup
-systemctl enable sshd
+# Common installs
+rpm-ostree install cockpit-system cockpit-ostree cockpit-podman nginx bind-utils procps-ng fcgiwrap jq tomcat guacamole-server
 
-# Cockpit stuff
-rpm-ostree install cockpit-system cockpit-ostree cockpit-podman
 
 # What about replacing firewall-cmd with direct firewalld config files?
 rm -f /etc/firewalld/services/{ssh,cockpit}.xml
@@ -76,8 +74,6 @@ for service in sshd cockpit.socket nginx fcgiwrap.socket; do
   echo "ConditionArchitecture=native" >> /etc/systemd/system/${service}.d/override.conf
 done
 
-systemctl enable sshd cockpit.socket nginx fcgiwrap.socket
-
 
 # Tailscale stuff
 cat << EOF > /etc/yum.repos.d/tailscale.repo
@@ -94,9 +90,6 @@ rpm-ostree install tailscale
 systemctl --user enable tailscaled.service
 
 
-# Guacamole guacd server
-rpm-ostree install guacamole-server tomcat
-systemctl enable guacd
 
 # Basic Guacamole config setup (edit /etc/guacamole/guacamole.properties post-deploy for users/connections)
 mkdir -p /etc/guacamole
@@ -253,5 +246,5 @@ server {
 }
 EOF
 
-systemctl enable nginx fcgiwrap.socket
+systemctl enable nginx fcgiwrap.socket guacd
 systemctl daemon-reload
