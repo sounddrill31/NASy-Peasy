@@ -9,12 +9,12 @@ dnf5 install -y tmux openssh-server nginx nodejs npm python3 python3-pip gcc gcc
 systemctl enable podman.socket sshd
 
 # Download noVNC (HTML5 VNC client)
-mkdir -p /usr/local || true
-cd /usr/local
+mkdir -p /var/local || true
+cd /var/local
 rm -rf noVNC websockify
 git clone https://github.com/novnc/noVNC.git
 git clone https://github.com/novnc/websockify.git
-ln -s /usr/local/noVNC/vnc.html /usr/local/noVNC/index.html
+ln -s /var/local/noVNC/vnc.html /var/local/noVNC/index.html
 
 # noVNC systemd service (standalone proxy)
 cat << 'EOF' > /etc/systemd/system/novnc.service
@@ -23,7 +23,7 @@ Description=noVNC proxy
 After=network.target vncserver.service
 
 [Service]
-ExecStart=/usr/local/websockify/run 6080 localhost:5901 --web=/usr/local/noVNC
+ExecStart=/var/local/websockify/run 6080 localhost:5901 --web=/var/local/noVNC
 Restart=always
 User=nobody
 
