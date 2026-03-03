@@ -238,4 +238,3 @@ EOF
 
 # Enable services
 systemctl enable nginx fcgiwrap.socket novnc vncserver
-systemctl daemon-reload
