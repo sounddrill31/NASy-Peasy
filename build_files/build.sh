@@ -25,12 +25,59 @@ systemctl enable podman.socket
 
 # SSH setup
 systemctl enable sshd
-firewall-cmd --permanent --add-service=ssh
 
 # Cockpit stuff
 rpm-ostree install cockpit-system cockpit-ostree cockpit-podman
-firewall-cmd --add-service=cockpit
-firewall-cmd --add-service=cockpit --permanent
+
+# What about replacing firewall-cmd with direct firewalld config files?
+rm -f /etc/firewalld/services/{ssh,cockpit}.xml
+cat << 'EOF' > /etc/firewalld/services/ssh.xml
+<?xml version="1.0" encoding="utf-8"?>
+<service version="1.0">
+  <short>SSH</short>
+  <description>Secure Shell (SSH) tunneling protocol</description>
+  <port protocol="tcp" port="22"/>
+</service>
+EOF
+
+cat << 'EOF' > /etc/firewalld/services/cockpit.xml
+<?xml version="1.0" encoding="utf-8"?>
+<service version="1.0">
+  <short>Cockpit</short>
+  <description>Cockpit Web Service</description>
+  <port protocol="https" port="9090"/>
+</service>
+EOF
+
+cat << 'EOF' > /etc/firewalld/services/guac.xml
+<?xml version="1.0" encoding="utf-8"?>
+<service version="1.0">
+  <short>Guacamole</short>
+  <description>Guacamole Web Service</description>
+  <port protocol="tcp" port="4822"/>
+</service>
+EOF
+
+
+cat << EOF >> /etc/firewalld/direct.xml
+<direct>
+  <zone>trusted</zone>
+  <service port="22" protocol="tcp">ssh</service>
+  <service port="9090" protocol="https">cockpit</service>
+  <service port="4822" protocol="tcp">guac</service>
+  <service port="80" protocol="tcp">http</service>
+</direct>
+EOF
+
+# Enable services properly for container build context
+for service in sshd cockpit.socket nginx fcgiwrap.socket; do
+  mkdir -p /etc/systemd/system/${service}.d
+  echo "[Unit]" > /etc/systemd/system/${service}.d/override.conf
+  echo "ConditionArchitecture=native" >> /etc/systemd/system/${service}.d/override.conf
+done
+
+systemctl enable sshd cockpit.socket nginx fcgiwrap.socket
+
 
 # Tailscale stuff
 cat << EOF > /etc/yum.repos.d/tailscale.repo
@@ -50,8 +97,6 @@ systemctl --user enable tailscaled.service
 # Guacamole guacd server
 rpm-ostree install guacamole-server tomcat
 systemctl enable guacd
-firewall-cmd --permanent --add-port=4822/tcp
-firewall-cmd --reload
 
 # Basic Guacamole config setup (edit /etc/guacamole/guacamole.properties post-deploy for users/connections)
 mkdir -p /etc/guacamole
@@ -208,6 +253,5 @@ server {
 }
 EOF
 
-firewall-cmd --permanent --add-service=http
 systemctl enable nginx fcgiwrap.socket
 systemctl daemon-reload
