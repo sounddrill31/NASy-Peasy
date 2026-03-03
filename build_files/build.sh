@@ -23,8 +23,25 @@ dnf5 install -y tmux openssh-server
 
 systemctl enable podman.socket sshd
 
+
+# Build and install Guac 
+# Guacamole (dnf5 + build from source, BEFORE rpm-ostree)
+dnf5 install -y gcc cairo-devel libjpeg-turbo-devel libpng-devel libuuid-devel \
+  freerdp-devel libssh2-devel libtelnet-devel libvncserver-devel pango-devel \
+  openssl-devel libtool libwebsockets-devel libpng-devel libvorbis-devel
+
+# Download + build guacamole-server
+cd /tmp
+wget https://archive.apache.org/dist/guacamole/1.6.0/source/guacamole-server-1.6.0.tar.gz
+tar -xzf guacamole-server-1.6.0.tar.gz
+cd guacamole-server-1.6.0
+./configure --with-systemd-dir=/usr/lib/systemd/system
+make
+make install
+ldconfig
+
 # Common installs
-rpm-ostree install cockpit-system cockpit-ostree cockpit-podman nginx bind-utils procps-ng fcgiwrap jq tomcat guacamole-server
+rpm-ostree install tailscale cockpit-system cockpit-ostree cockpit-podman nginx bind-utils procps-ng fcgiwrap jq tomcat
 
 
 # What about replacing firewall-cmd with direct firewalld config files?
@@ -86,7 +103,6 @@ repo_gpgcheck=1
 gpgcheck=1
 gpgkey=https://pkgs.tailscale.com/stable/fedora/repo.gpg
 EOF
-rpm-ostree install tailscale
 systemctl --user enable tailscaled.service
 
 
@@ -100,7 +116,6 @@ EOF
 echo "export GUACAMOLE_HOME=/etc/guacamole" > /etc/profile.d/guacamole.sh
 
 # Clean merged dashboard (dig IP + service controls + Tailscale auth)
-rpm-ostree install nginx bind-utils procps-ng fcgiwrap jq
 mkdir -p /usr/share/services/cgi-bin /etc/nginx/conf.d /etc/systemd/system/tailscaled.service.d
 
 # Main dashboard HTML (merged features)
