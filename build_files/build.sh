@@ -24,7 +24,7 @@ dnf5 install -y tmux openssh-server
 systemctl enable podman.socket
 
 # SSH setup
-systemctl enable --now sshd
+systemctl enable sshd
 firewall-cmd --permanent --add-service=ssh
 
 # Cockpit stuff
