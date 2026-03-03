@@ -100,6 +100,25 @@ User=nginx
 Group=nginx
 EOF
 
+
+# VNC Server systemd unit
+cat << 'EOF' > /etc/systemd/system/vncserver.service
+[Unit]
+Description=Standalone VNC Server (Xvnc)
+After=network.target
+
+[Service]
+Type=simple
+# Runs Xvnc on display :1 (port 5901).
+# Restricted to localhost with no password since noVNC proxies the connection.
+ExecStart=/usr/bin/Xvnc :1 -localhost yes -geometry 1280x720 -depth 24 -SecurityTypes None -AlwaysShared
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 # Tailscale repo
 cat << EOF > /etc/yum.repos.d/tailscale.repo
 [tailscale]
