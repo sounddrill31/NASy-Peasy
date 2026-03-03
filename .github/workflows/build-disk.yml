@@ -98,6 +98,18 @@ jobs:
           compression-level: 0
           overwrite: true
       
+      - name: Upload to GitHub Releases (split large files)
+        if: inputs.upload-to-s3 != true && github.event_name != 'pull_request'
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: ${{ steps.build.outputs.output-directory }}/*
+          allowUpdates: true
+          tag: latest
+          prerelease: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          split: true
+          splitChunks: 1900
+      
       - name: Upload to S3
         if: inputs.upload-to-s3 == true && github.event_name != 'pull_request'
         shell: bash
