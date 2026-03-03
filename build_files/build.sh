@@ -9,6 +9,7 @@ dnf5 install -y tmux openssh-server nginx nodejs npm python3 python3-pip gcc gcc
 systemctl enable podman.socket sshd
 
 # Download noVNC (HTML5 VNC client)
+mkdir -p /opt
 cd /opt
 rm -rf noVNC websockify
 git clone https://github.com/novnc/noVNC.git
