@@ -74,6 +74,32 @@ cat << EOF > /etc/firewalld/direct.xml
 </direct>
 EOF
 
+# Create fcgiwrap systemd units
+cat << 'EOF' > /etc/systemd/system/fcgiwrap.socket
+[Unit]
+Description=fcgiwrap Socket
+
+[Socket]
+ListenStream=/run/fcgiwrap.socket
+SocketUser=nginx
+SocketGroup=nginx
+SocketMode=0660
+
+[Install]
+WantedBy=sockets.target
+EOF
+
+cat << 'EOF' > /etc/systemd/system/fcgiwrap.service
+[Unit]
+Description=Simple CGI Server
+After=nss-user-lookup.target
+
+[Service]
+ExecStart=/usr/sbin/fcgiwrap
+User=nginx
+Group=nginx
+EOF
+
 # Tailscale repo
 cat << EOF > /etc/yum.repos.d/tailscale.repo
 [tailscale]
