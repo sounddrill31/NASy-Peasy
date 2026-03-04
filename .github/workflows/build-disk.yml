@@ -98,17 +98,40 @@ jobs:
           compression-level: 0
           overwrite: true
       
-      - name: Upload to GitHub Releases (split large files)
+      - name: Split files larger than 1.9GB
         if: inputs.upload-to-s3 != true && github.event_name != 'pull_request'
-        uses: ncipollo/release-action@v1
+        run: |
+          cd ${{ steps.build.outputs.output-directory }}
+          
+          # 1.9 GB in bytes (approx 1992294400 bytes)
+          MAX_SIZE=1992294400 
+          
+          for file in *; do
+            if [ -f "$file" ]; then
+              # Get file size in bytes cross-platform
+              FILE_SIZE=$(ls -nl "$file" | awk '{print $5}')
+              
+              if [ "$FILE_SIZE" -gt "$MAX_SIZE" ]; then
+                echo "File '$file' is larger than 1.9GB. Splitting..."
+                # Split into 1.9GB chunks with a .part suffix
+                split -b 1900m "$file" "${file}.part"
+                # Remove the original massive file to prevent upload errors
+                rm "$file"
+              else
+                echo "File '$file' is under the limit. No splitting needed."
+              fi
+            fi
+          done
+        shell: bash
+
+      - name: Upload to GitHub Releases
+        if: inputs.upload-to-s3 != true && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
         with:
-          artifacts: ${{ steps.build.outputs.output-directory }}/*
-          allowUpdates: true
-          tag: latest
+          files: ${{ steps.build.outputs.output-directory }}/*
+          tag_name: latest
           prerelease: true
           token: ${{ secrets.GITHUB_TOKEN }}
-          split: true
-          splitChunks: 1900
       
       - name: Upload to S3
         if: inputs.upload-to-s3 == true && github.event_name != 'pull_request'
