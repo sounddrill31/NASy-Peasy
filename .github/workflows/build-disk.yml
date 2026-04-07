@@ -104,10 +104,10 @@ jobs:
         if: inputs.upload-to-s3 != true && github.event_name != 'pull_request'
         run: |
           cd ${{ steps.build.outputs.output-directory }}
-          # Flatten directory and rename files to include disk type
+          # Flatten directory and rename files to include image name, platform and disk type
           find . -mindepth 2 -type f | while read -r file; do
             base=$(basename "$file")
-            mv "$file" "./${{ matrix.disk-type }}-$base"
+            mv "$file" "./${{ env.IMAGE_NAME }}-${{ inputs.platform }}-${{ matrix.disk-type }}-$base"
           done
           # Remove now-empty directories
           find . -mindepth 1 -type d -empty -delete
