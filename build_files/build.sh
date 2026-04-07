@@ -32,7 +32,7 @@ WantedBy=multi-user.target
 EOF
 
 # Common installs
-rpm-ostree install tailscale cockpit-system cockpit-ostree cockpit-podman cockpit-storaged podman-compose nginx bind-utils procps-ng jq
+rpm-ostree install podman podman-compose tailscale cockpit-system cockpit-ostree cockpit-podman cockpit-storaged nginx bind-utils procps-ng jq
 
 # What about replacing firewall-cmd with direct firewalld config files?
 rm -f /etc/firewalld/services/{ssh,cockpit,guac}.xml
@@ -108,28 +108,16 @@ EOF
 mkdir -p /opt/nas-dashboard
 git clone https://github.com/sounddrill31/NAS-Dashboard.git /tmp/nas-dashboard
 # Modify app.py to use port 8000 instead of 80 to avoid conflict with Nginx
-sed -i 's/port=80/port=8000/' /tmp/nas-dashboard/app.py
+sed -i 's/port=80\b/port=8000/g' /tmp/nas-dashboard/app.py
 # Run the installer from the temporary directory
 cd /tmp/nas-dashboard
 python3 install.py
 # The installer sets up a systemd service, but we need to make sure it uses our modified app.py
-# Actually, install.py copies files to /opt/nas-dashboard. Let's make sure /opt/nas-dashboard/app.py is also modified.
-sed -i 's/port=80/port=8000/' /opt/nas-dashboard/app.py
+# install.py copies files to /opt/nas-dashboard. Let's make sure /opt/nas-dashboard/app.py is also modified.
+sed -i 's/port=80\b/port=8000/g' /opt/nas-dashboard/app.py
 
 # Clean up temporary install files
 rm -rf /tmp/nas-dashboard
-
-# Tailscale repo
-cat << EOF > /etc/yum.repos.d/tailscale.repo
-[tailscale]
-name=Tailscale stable
-baseurl=https://pkgs.tailscale.com/stable/fedora/\$basearch
-enabled=1
-type=rpm
-repo_gpgcheck=1
-gpgcheck=1
-gpgkey=https://pkgs.tailscale.com/stable/fedora/repo.gpg
-EOF
 
 # Tailscale auto-auth
 mkdir -p /etc/systemd/system/tailscaled.service.d
