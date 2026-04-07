@@ -32,7 +32,7 @@ WantedBy=multi-user.target
 EOF
 
 # Common installs
-rpm-ostree install tailscale cockpit-system cockpit-ostree cockpit-podman nginx bind-utils procps-ng fcgiwrap jq
+rpm-ostree install tailscale cockpit-system cockpit-ostree cockpit-podman cockpit-storaged podman-compose nginx bind-utils procps-ng jq
 
 # What about replacing firewall-cmd with direct firewalld config files?
 rm -f /etc/firewalld/services/{ssh,cockpit,guac}.xml
@@ -74,33 +74,6 @@ cat << EOF > /etc/firewalld/direct.xml
 </direct>
 EOF
 
-# Create fcgiwrap systemd units
-cat << 'EOF' > /etc/systemd/system/fcgiwrap.socket
-[Unit]
-Description=fcgiwrap Socket
-
-[Socket]
-ListenStream=/run/fcgiwrap.socket
-SocketUser=nginx
-SocketGroup=nginx
-SocketMode=0660
-
-[Install]
-WantedBy=sockets.target
-EOF
-
-cat << 'EOF' > /etc/systemd/system/fcgiwrap.service
-[Unit]
-Description=Simple CGI Server
-After=nss-user-lookup.target
-
-[Service]
-ExecStart=/usr/sbin/fcgiwrap
-User=nginx
-Group=nginx
-EOF
-
-
 # VNC Server systemd unit
 cat << 'EOF' > /etc/systemd/system/vncserver.service
 [Unit]
@@ -131,103 +104,56 @@ gpgcheck=1
 gpgkey=https://pkgs.tailscale.com/stable/fedora/repo.gpg
 EOF
 
-# Clean dashboard + CGI scripts
-mkdir -p /usr/share/services/cgi-bin /etc/nginx/conf.d /etc/systemd/system/tailscaled.service.d
+# Install NAS-Dashboard
+mkdir -p /opt/nas-dashboard
+git clone https://github.com/sounddrill31/NAS-Dashboard.git /tmp/nas-dashboard
+# Modify app.py to use port 8000 instead of 80 to avoid conflict with Nginx
+sed -i 's/port=80/port=8000/' /tmp/nas-dashboard/app.py
+# Run the installer from the temporary directory
+cd /tmp/nas-dashboard
+python3 install.py
+# The installer sets up a systemd service, but we need to make sure it uses our modified app.py
+# Actually, install.py copies files to /opt/nas-dashboard. Let's make sure /opt/nas-dashboard/app.py is also modified.
+sed -i 's/port=80/port=8000/' /opt/nas-dashboard/app.py
 
-# Dashboard HTML (noVNC version)
-cat << 'EOF' > /usr/share/services/index.html
-<!doctype html>
-<meta charset="utf-8">
-<link rel="stylesheet" href="https://unpkg.com/mvp.css@1.12/mvp.css">
-<title>🚀 Services Dashboard</title>
-<body>
-  <header>
-    <h1>🖥️ Services Dashboard</h1>
-    <p>🌐 Public IP: <span id="public-ip">Loading...</span></p>
-    <p>🔌 Local IP: <span id="local-ip">-</span></p>
-  </header>
-  <main>
-    <section>
-      <h2>📊 Service Status & Controls</h2>
-      <div id="services"></div>
-    </section>
-    <section>
-      <h2>🔗 Quick Links</h2>
-      <ul>
-        <li><a href="https://localhost:9090" target="_blank">🛩️ Cockpit</a></li>
-        <li><a href="http://localhost:6080/vnc.html" target="_blank">🖥️ noVNC</a></li>
-        <li><a href="http://localhost:80" target="_blank">📊 Dashboard</a></li>
-      </ul>
-    </section>
-    <details><summary>🔗 Proxies</summary>
-      <ul>
-        <li><a href="/cockpit" target="_blank">Cockpit</a></li>
-        <li><a href="/novnc" target="_blank">noVNC</a></li>
-      </ul>
-    </details>
-  </main>
-  <script>
-    const services = {cockpit: 'cockpit.socket', novnc: 'novnc.service', nginx: 'nginx.service', sshd: 'sshd.service', tailscaled: 'tailscaled.service'};
-    fetch('/cgi-bin/public-ip').then(r=>r.text()).then(ip=>document.getElementById('public-ip').innerText=ip);
-    document.getElementById('local-ip').innerText = window.location.hostname;
-    async function refreshServices(){const status=await fetch('/cgi-bin/services').then(r=>r.json());document.getElementById('services').innerHTML=Object.entries(services).map(([n,u])=>{const a=status[u]||'unknown';const c=a==='active'?'green':a==='inactive'?'red':'gray';return`<details><summary>${n} <span style="color:${c}">● ${a}</span></summary><button onclick="control('${u}','start')">▶</button><button onclick="control('${u}','stop')">⏹</button><button onclick="control('${u}','restart')">🔄</button><button onclick="refreshServices()">↻</button></details>`;}).join('');}refreshServices();setInterval(refreshServices,5000);async function control(u,a){await fetch(`/cgi-bin/control?unit=${u}&action=${a}`);refreshServices();}
-  </script>
-</body>
+# Clean up temporary install files
+rm -rf /tmp/nas-dashboard
+
+# Tailscale repo
+cat << EOF > /etc/yum.repos.d/tailscale.repo
+[tailscale]
+name=Tailscale stable
+baseurl=https://pkgs.tailscale.com/stable/fedora/\$basearch
+enabled=1
+type=rpm
+repo_gpgcheck=1
+gpgcheck=1
+gpgkey=https://pkgs.tailscale.com/stable/fedora/repo.gpg
 EOF
-
-# CGI scripts (updated for noVNC)
-cat << 'EOF' > /usr/share/services/cgi-bin/public-ip
-#!/bin/bash
-echo "Content-Type: text/plain"
-echo
-dig +short myip.opendns.com @resolver1.opendns.com
-EOF
-
-cat << 'EOF' > /usr/share/services/cgi-bin/services
-#!/bin/bash
-echo "Content-Type: application/json"
-echo '{"cockpit":"'$(systemctl is-active cockpit.socket 2>/dev/null || echo unknown)'","novnc":"'$(systemctl is-active novnc.service 2>/dev/null || echo unknown)'","nginx":"'$(systemctl is-active nginx.service 2>/dev/null || echo unknown)'","sshd":"'$(systemctl is-active sshd.service 2>/dev/null || echo unknown)'","tailscaled":"'$(systemctl --user is-active tailscaled.service 2>/dev/null || echo unknown)'"}'
-EOF
-
-cat << 'EOF' > /usr/share/services/cgi-bin/control
-#!/bin/bash
-echo "Content-Type: text/plain"
-echo
-read GET
-unit=$(echo "$GET" | grep -o 'unit=[^&]*' | cut -d= -f2)
-action=$(echo "$GET" | grep -o 'action=[^&]*' | cut -d= -f2)
-if [[ "$unit" == "tailscaled.service" ]]; then
-  su -c "systemctl --user $action tailscaled" $(whoami)
-  [[ "$action" == "start" || "$action" == "restart" ]] && su -c "tailscale up --authkey=YOUR_AUTH_KEY --accept-routes" $(whoami)
-else
-  sudo systemctl $action $unit
-fi
-echo "OK"
-EOF
-
-chmod +x /usr/share/services/cgi-bin/*
 
 # Tailscale auto-auth
+mkdir -p /etc/systemd/system/tailscaled.service.d
 cat << 'EOF' > /etc/systemd/system/tailscaled.service.d/authkey.conf
 [Service]
 ExecStartPost=/usr/bin/tailscale up --authkey=YOUR_AUTH_KEY --accept-routes
 EOF
 
-# Nginx config
+# Nginx config as reverse proxy
+mkdir -p /etc/nginx/conf.d
 cat << 'EOF' > /etc/nginx/conf.d/dashboard.conf
 server {
   listen 80;
-  root /usr/share/services;
-  index index.html;
   
-  location /cgi-bin/ { 
-    include fastcgi_params;
-    fastcgi_pass unix:/run/fcgiwrap.socket;
-    fastcgi_param SCRIPT_FILENAME /usr/share/services/cgi-bin$fastcgi_script_name;
+  location / {
+    proxy_pass http://localhost:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
   }
-  location /cockpit { return 301 https://localhost:9090$request_uri; }
-  location /novnc {
-    proxy_pass http://localhost:6080;
+
+  location /cockpit { return 301 https://$host:9090$request_uri; }
+  
+  location /novnc/ {
+    proxy_pass http://localhost:6080/;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
@@ -237,4 +163,5 @@ server {
 EOF
 
 # Enable services
-systemctl enable nginx fcgiwrap.socket novnc vncserver
+systemctl enable nginx novnc vncserver nas-dashboard
+
