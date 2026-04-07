@@ -104,8 +104,8 @@ jobs:
         if: inputs.upload-to-s3 != true && github.event_name != 'pull_request'
         run: |
           cd ${{ steps.build.outputs.output-directory }}
-          # Find files larger than 2000MB and split them
-          find . -maxdepth 1 -type f -size +2000M | while read -r file; do
+          # Find all files larger than 2000MB and split them
+          find . -type f -size +2000M | while read -r file; do
             echo "Splitting $file into 2GB chunks..."
             split -b 2000M --numeric-suffixes=0 "$file" "$file.part"
             rm "$file"
@@ -115,7 +115,8 @@ jobs:
         if: inputs.upload-to-s3 != true && github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.build.outputs.output-directory }}/*
+          files: |
+            ${{ steps.build.outputs.output-directory }}/**/*
           tag_name: latest
           prerelease: true
           token: ${{ secrets.GITHUB_TOKEN }}
