@@ -112,9 +112,13 @@ sed -i 's/port=80\b/port=8000/g' /tmp/nas-dashboard/app.py
 # Run the installer from the temporary directory
 cd /tmp/nas-dashboard
 sed -i 's|/opt/nas-dashboard|/var/opt/nas-dashboard|g' install.py
+# Prevent install.py from failing on systemctl/hostnamectl calls during build
+# Using a more aggressive sed to comment out the full subprocess.run call regardless of its formatting
+sed -i '/subprocess.run(\["systemctl"/,/)/s/^/#/' install.py
+sed -i '/subprocess.run(\["hostnamectl"/,/)/s/^/#/' install.py
 python3 install.py
 # The installer sets up a systemd service, but we need to make sure it uses our modified app.py
-# install.py copies files to /opt/nas-dashboard. Let's make sure /opt/nas-dashboard/app.py is also modified.
+# install.py copies files to /var/opt/nas-dashboard. Let's make sure it's also modified.
 sed -i 's/port=80\b/port=8000/g' /var/opt/nas-dashboard/app.py
 
 # Clean up temporary install files
