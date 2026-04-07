@@ -105,16 +105,17 @@ gpgkey=https://pkgs.tailscale.com/stable/fedora/repo.gpg
 EOF
 
 # Install NAS-Dashboard
-mkdir -p /opt/nas-dashboard
+mkdir -p /var/opt/nas-dashboard
 git clone https://github.com/sounddrill31/NAS-Dashboard.git /tmp/nas-dashboard
 # Modify app.py to use port 8000 instead of 80 to avoid conflict with Nginx
 sed -i 's/port=80\b/port=8000/g' /tmp/nas-dashboard/app.py
 # Run the installer from the temporary directory
 cd /tmp/nas-dashboard
+sed -i 's|/opt/nas-dashboard|/var/opt/nas-dashboard|g' install.py
 python3 install.py
 # The installer sets up a systemd service, but we need to make sure it uses our modified app.py
 # install.py copies files to /opt/nas-dashboard. Let's make sure /opt/nas-dashboard/app.py is also modified.
-sed -i 's/port=80\b/port=8000/g' /opt/nas-dashboard/app.py
+sed -i 's/port=80\b/port=8000/g' /var/opt/nas-dashboard/app.py
 
 # Clean up temporary install files
 rm -rf /tmp/nas-dashboard
