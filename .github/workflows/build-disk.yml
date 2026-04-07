@@ -91,61 +91,25 @@ jobs:
 
       - name: Upload disk images and Checksum to Job Artifacts
         if: inputs.upload-to-s3 != true && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v4
         with:
+          name: ${{ env.IMAGE_NAME }}-${{ matrix.disk-type }}
           path: ${{ steps.build.outputs.output-directory }}
           if-no-files-found: error
-          retention-days: 0
+          retention-days: 7
           compression-level: 0
           overwrite: true
-      
-      - name: Upload to Gofile
+
+      - name: Split large files
         if: inputs.upload-to-s3 != true && github.event_name != 'pull_request'
         run: |
           cd ${{ steps.build.outputs.output-directory }}
-          
-          # Install curl if not present
-          sudo apt-get update
-          sudo apt-get install -y curl jq
-          
-          echo "Uploading files to Gofile..."
-          for file in *; do
-            if [ -f "$file" ]; then
-              echo "Uploading $file..."
-              
-              # Upload to Gofile using their API
-              RESPONSE=$(curl -s -X POST "https://gofile.io/uploadFile" \
-                -H "Content-Type: multipart/form-data" \
-                -F "file=@$file" \
-                -F "token=${{ secrets.GOFILE_TOKEN }}")
-              
-              # Extract download page URL from response
-              DOWNLOAD_PAGE=$(echo $RESPONSE | jq -r '.data.downloadPage')
-              
-              if [ "$DOWNLOAD_PAGE" != "null" ] && [ "$DOWNLOAD_PAGE" != "" ]; then
-                echo "✅ $file uploaded successfully: $DOWNLOAD_PAGE"
-                echo "$file: $DOWNLOAD_PAGE" >> gofile-links.txt
-              else
-                echo "❌ Failed to upload $file"
-              fi
-            fi
+          # Find files larger than 2000MB and split them
+          find . -maxdepth 1 -type f -size +2000M | while read -r file; do
+            echo "Splitting $file into 2GB chunks..."
+            split -b 2000M --numeric-suffixes=0 "$file" "$file.part"
+            rm "$file"
           done
-          
-          # Save links to artifact
-          echo "Gofile download links:"
-          cat gofile-links.txt
-          
-          # Upload links as artifact
-          echo "::notice:: Gofile upload complete. Check gofile-links.txt for download URLs"
-
-      - name: Upload Gofile links as artifact
-        if: inputs.upload-to-s3 != true && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: gofile-links-${{ matrix.disk-type }}
-          path: ${{ steps.build.outputs.output-directory }}/gofile-links.txt
-          retention-days: 7
-          if-no-files-found: warn
 
       - name: Upload to GitHub Releases
         if: inputs.upload-to-s3 != true && github.event_name != 'pull_request'
