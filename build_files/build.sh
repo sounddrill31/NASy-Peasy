@@ -4,7 +4,7 @@ set -ouex pipefail
 
 ### Install DE and other core packages
 dnf groupinstall -y "LXQt Desktop" \
-  && dnf install -y firefox network-manager-applet \
+  && dnf install -y network-manager-applet \
   && dnf clean all
 
 
