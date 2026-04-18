@@ -125,7 +125,7 @@ jobs:
 
       - name: Upload to GitHub Releases
         if: inputs.upload-to-s3 != true && github.event_name != 'pull_request'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: ${{ steps.build.outputs.output-directory }}/*
           tag_name: latest
