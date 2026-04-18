@@ -2,7 +2,13 @@
 
 set -ouex pipefail
 
-### Install packages
+### Install DE and other core packages
+dnf groupinstall -y "LXQt Desktop" \
+  && dnf install -y firefox network-manager-applet \
+  && dnf clean all
+
+
+### Install server packages
 dnf5 install -y tmux openssh-server nginx nodejs npm python3 python3-pip gcc gcc-c++ make tigervnc-server
 
 #### Example for enabling a System Unit File
