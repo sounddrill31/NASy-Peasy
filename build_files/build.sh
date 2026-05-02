@@ -91,12 +91,30 @@ Type=simple
 # Runs Xvnc on display :1 (port 5901).
 # Restricted to localhost with no password since noVNC proxies the connection.
 ExecStart=/usr/bin/Xvnc :1 -localhost yes -geometry 1280x720 -depth 24 -SecurityTypes None -AlwaysShared
+# The session is started via a separate service or script triggered by Xvnc or run separately
+ExecStartPost=/usr/bin/nasy-vnc-session
 Restart=always
 User=root
 
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# VNC Session Wrapper
+cat << 'EOF' > /usr/bin/nasy-vnc-session
+#!/bin/bash
+export DISPLAY=:1
+source /etc/switch-session.conf
+if [[ "$SESSION" == "plasma" ]]; then
+    export PLASMA_SHELL_PACKAGE=org.kde.plasma.bigscreen
+    # Bigscreen is Wayland-first, but we can run it in X11 mode or use the shell
+    # For VNC (X11), we might need to start a standard Plasma session with the bigscreen shell
+    startplasma-x11
+else
+    startlxqt
+fi
+EOF
+chmod +x /usr/bin/nasy-vnc-session
 
 # Tailscale repo
 cat << EOF > /etc/yum.repos.d/tailscale.repo

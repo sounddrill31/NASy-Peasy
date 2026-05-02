@@ -1,6 +1,36 @@
 [customizations.installer.kickstart]
 contents = """
+%pre
+# Switch to a different virtual terminal (VT6) to interact with the user
+exec < /dev/tty6 > /dev/tty6 2> /dev/tty6
+chvt 6
+
+echo "***************************************************"
+echo "* Welcome to the NASy-Peasy Flavor Selector!      *"
+echo "***************************************************"
+echo ""
+echo "Which desktop experience would you like by default?"
+echo "1) Plasma Bigscreen (For the Big Screen / TV)"
+echo "2) LXQt (Lightweight / VNC optimization)"
+echo ""
+read -p "Selection [2]: " choice
+
+case "$choice" in
+    1) echo "plasma" > /tmp/nasy_choice ;;
+    *) echo "lxqt" > /tmp/nasy_choice ;;
+esac
+
+# Switch back to the installer UI (usually VT1)
+chvt 1
+%end
+
 %post
+# Use our internal binary to set the session based on the installer choice
+if [ -f /tmp/nasy_choice ]; then
+    CHOICE=$(cat /tmp/nasy_choice)
+    /usr/bin/switch-session set "$CHOICE"
+fi
+
 bootc switch --mutate-in-place --transport registry ghcr.io/sounddrill31/NASy-Peasy:latest
 %end
 """
