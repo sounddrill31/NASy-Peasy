@@ -12,6 +12,7 @@ dnf install -y \
     plasma-workspace-wayland \
     plasma-login-manager \
     kcm-plasmalogin \
+    glibc-langpack-en \
     network-manager-applet \
     labwc \
     wayvnc \
@@ -34,6 +35,9 @@ dnf install -y \
 
 dnf clean all
 
+# Configure Locale (Required for Qt6/Plasma)
+echo "LANG=en_US.UTF-8" > /etc/locale.conf
+
 ### 2. Configure Display Manager (Plasma Login Manager)
 # Disable other greeters and force PLM as the default
 systemctl disable gdm greetd lightdm sddm || true
@@ -48,7 +52,7 @@ cat << 'EOF' > /usr/share/wayland-sessions/nasy-lxqt.desktop
 [Desktop Entry]
 Name=NASy-Peasy Desktop (LXQt on Wayland)
 Comment=LXQt Session using KWin Wayland
-Exec=/usr/bin/kwin_wayland --xwayland --lxqt lxqt-session
+Exec=/usr/bin/kwin_wayland --xwayland --exit-with-session=/usr/bin/startlxqt
 Type=Application
 DesktopNames=LXQt
 EOF
@@ -56,7 +60,7 @@ EOF
 systemctl set-default graphical.target
 systemctl enable podman.socket sshd nginx initial-setup
 
-### 3. Wayland VNC Server (KWin-native)
+### 3. Wayland VNC Server (Headless LabWC)
 cat << 'EOF' > /usr/bin/nasy-vnc-server
 #!/bin/bash
 source /etc/switch-session.conf
@@ -64,9 +68,9 @@ export XDG_RUNTIME_DIR=/run/user/0
 export WAYLAND_DISPLAY=wayland-vnc
 mkdir -p $XDG_RUNTIME_DIR
 
-# Start headless KWin with built-in VNC
-kwin_wayland --headless --vnc-port 5901 --socket $WAYLAND_DISPLAY --width 1280 --height 720 &
-KWIN_PID=$!
+# Start labwc as the headless compositor with wayvnc
+labwc -s "wayvnc --render-node /dev/dri/renderD128 0.0.0.0 5901" &
+COMPOSITOR_PID=$!
 
 sleep 3
 
@@ -74,11 +78,11 @@ if [[ "$SESSION" == "plasma" ]]; then
     export PLASMA_SHELL_PACKAGE=org.kde.plasma.bigscreen
     QT_QPA_PLATFORM=wayland /usr/bin/startplasma-wayland &
 else
-    # Start the full LXQt session components on KWin
+    # Start LXQt components
     lxqt-session &
 fi
 
-wait $KWIN_PID
+wait $COMPOSITOR_PID
 EOF
 chmod +x /usr/bin/nasy-vnc-server
 
@@ -127,6 +131,18 @@ git clone https://github.com/sounddrill31/NAS-Dashboard.git /tmp/nas-dashboard
 cd /tmp/nas-dashboard
 python3 install.py
 rm -rf /tmp/nas-dashboard
+
+# Configure Nginx as a reverse proxy for the dashboard
+mkdir -p /etc/nginx/default.d
+cat << 'EOF' > /etc/nginx/default.d/nas-dashboard.conf
+location / {
+    proxy_pass http://localhost:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+EOF
 
 # Enable remaining services
 systemctl enable novnc vncserver nas-dashboard
