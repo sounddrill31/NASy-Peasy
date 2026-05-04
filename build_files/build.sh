@@ -6,11 +6,12 @@ set -ouex pipefail
 # Install LXQt Group using dnf5 syntax
 dnf install -y @lxqt-desktop-environment
 
-# Install Plasma Bigscreen, SDDM, and Wayland tools
+# Install Plasma Bigscreen, Plasma Login Manager, and Wayland tools
 dnf install -y \
     plasma-bigscreen \
     plasma-workspace-wayland \
-    sddm \
+    plasma-login-manager \
+    kcm-plasmalogin \
     network-manager-applet \
     labwc \
     wayvnc \
@@ -33,21 +34,13 @@ dnf install -y \
 
 dnf clean all
 
-### 2. Configure Display Manager (SDDM)
-# Disable other greeters and force SDDM as the default
-systemctl disable gdm greetd lightdm || true
-systemctl enable --force sddm
+### 2. Configure Display Manager (Plasma Login Manager)
+# Disable other greeters and force PLM as the default
+systemctl disable gdm greetd lightdm sddm || true
+systemctl enable --force plasmalogin
 
-# Configure SDDM for Wayland
-mkdir -p /etc/sddm.conf.d
-cat << 'EOF' > /etc/sddm.conf.d/wayland.conf
-[General]
-DisplayServer=wayland
-GreeterEnvironment=QT_WAYLAND_SHELL_INTEGRATION=layer-shell
-
-[Wayland]
-CompositorCommand=kwin_wayland --drm --no-lockscreen --no-global-shortcuts --locale en_US
-EOF
+# Configure Plasma Login Manager for autologin
+mkdir -p /etc/plasmalogin.conf.d
 
 # Create the custom LXQt-on-KWin Wayland session
 mkdir -p /usr/share/wayland-sessions

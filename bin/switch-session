@@ -4,7 +4,7 @@
 # Used for switching between LXQt and Plasma Bigscreen
 
 CONFIG_FILE="/etc/switch-session.conf"
-SDDM_CONFIG="/etc/sddm.conf.d/nasy.conf"
+PLM_CONFIG="/etc/plasmalogin.conf.d/nasy.conf"
 
 set_session() {
     local session=$1
@@ -13,15 +13,15 @@ set_session() {
     case "$session" in
         lxqt)
             echo "SESSION=lxqt" > "$CONFIG_FILE"
-            # Update SDDM default
-            mkdir -p /etc/sddm.conf.d
-            echo -e "[Autologin]\nSession=nasy-lxqt.desktop" > "$SDDM_CONFIG"
+            # Update PLM default
+            mkdir -p /etc/plasmalogin.conf.d
+            echo -e "[Autologin]\nUser=root\nSession=nasy-lxqt.desktop" > "$PLM_CONFIG"
             ;;
         plasma)
             echo "SESSION=plasma" > "$CONFIG_FILE"
-            # Update SDDM default
-            mkdir -p /etc/sddm.conf.d
-            echo -e "[Autologin]\nSession=plasmawayland.desktop" > "$SDDM_CONFIG"
+            # Update PLM default
+            mkdir -p /etc/plasmalogin.conf.d
+            echo -e "[Autologin]\nUser=root\nSession=plasmawayland.desktop" > "$PLM_CONFIG"
             ;;
         *)
             echo "Unknown session: $session. Use 'lxqt' or 'plasma'."
