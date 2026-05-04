@@ -3,8 +3,8 @@
 set -ouex pipefail
 
 ### 1. Install Desktop Environments & Packages
-# Install LXQt Group
-dnf groupinstall -y "LXQt Desktop"
+# Install LXQt Group using dnf5 syntax
+dnf install -y @lxqt-desktop-environment
 
 # Install Plasma Bigscreen, SDDM, and Wayland tools
 dnf install -y \
