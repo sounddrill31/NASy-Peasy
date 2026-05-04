@@ -9,7 +9,7 @@ dnf groupinstall -y "LXQt Desktop" \
 
 
 ### Install server packages
-dnf5 install -y tmux openssh-server nginx nodejs npm python3 python3-pip gcc gcc-c++ make tigervnc-server
+dnf5 install -y tmux openssh-server nginx nodejs npm python3 python3-pip gcc gcc-c++ make tigervnc-server initial-setup-gui anaconda-widgets
 
 #### Example for enabling a System Unit File
 systemctl enable podman.socket sshd
@@ -170,5 +170,26 @@ server {
 EOF
 
 # Enable services
-systemctl enable nginx novnc vncserver nas-dashboard
+systemctl enable nginx novnc vncserver nas-dashboard initial-setup
 
+# Configure initial-setup
+mkdir -p /etc/initial-setup
+echo "gui" > /etc/initial-setup/reconfig
+
+# Install custom Anaconda Add-on (NASy-Peasy Spoke)
+mkdir -p /usr/share/anaconda/addons
+cp -r /ctx/build_files/nasy-addon/* /usr/share/anaconda/addons/
+
+# Install custom binaries
+cp /ctx/bin/* /usr/bin/
+chmod +x /usr/bin/switch-session /usr/bin/set-hostname
+
+# Initialize session config
+echo "SESSION=lxqt" > /etc/switch-session.conf
+
+# Set hostname if specified
+if [ -f /ctx/build_files/hostname ]; then
+    IMAGE_HOSTNAME=$(cat /ctx/build_files/hostname)
+    echo "Setting image hostname to: $IMAGE_HOSTNAME"
+    echo "$IMAGE_HOSTNAME" > /etc/hostname
+fi

@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk+" version="3.0"/>
+  <requires lib="AnacondaWidgets" version="1.0"/>
+  <object class="AnacondaSpokeWindow" id="nasy_window">
+    <property name="can_focus">False</property>
+    <property name="window_name" translatable="yes">NASy-Peasy Configuration</property>
+    <child internal-child="main_area">
+      <object class="GtkBox" id="main_box">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="orientation">vertical</property>
+        <property name="spacing">18</property>
+        <property name="margin_left">24</property>
+        <property name="margin_right">24</property>
+        <property name="margin_top">24</property>
+        <child>
+          <object class="GtkLabel" id="title_label">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="label" translatable="yes">System Configuration</property>
+            <attributes>
+              <attribute name="weight" value="bold"/>
+              <attribute name="scale" value="1.5"/>
+            </attributes>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="hostname_box">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="spacing">12</property>
+            <child>
+              <object class="GtkLabel" id="hostname_label">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">Hostname:</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkEntry" id="hostname_entry">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="hexpand">True</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="mdns_preview">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="label" translatable="yes">mDNS Preview: nasy-peasy.local</property>
+            <property name="xalign">0</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel" id="mdns_warning">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="label" translatable="yes">Warning: mDNS (.local) conflicts can occur if multiple devices on the same network share the same hostname.</property>
+            <property name="wrap">True</property>
+            <property name="xalign">0</property>
+            <attributes>
+              <attribute name="foreground" value="red"/>
+            </attributes>
+          </object>
+        </child>
+        <child>
+          <object class="GtkSeparator">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox" id="session_box">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="spacing">12</property>
+            <child>
+              <object class="GtkLabel" id="session_label">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">Desktop Experience:</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkComboBoxText" id="session_combo">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="hexpand">True</property>
+                <items>
+                  <item id="lxqt" translatable="yes">LXQt (Lightweight/VNC)</item>
+                  <item id="plasma" translatable="yes">Plasma Bigscreen (TV/Big Screen)</item>
+                </items>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

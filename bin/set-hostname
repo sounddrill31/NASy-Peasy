@@ -1,0 +1,31 @@
+#!/bin/bash
+# set-hostname: A utility to set the system hostname and preview mDNS
+
+if [ "$EUID" -ne 0 ]; then
+  echo "Error: Please run as root (use sudo)."
+  exit 1
+fi
+
+CURRENT_HOSTNAME=$(hostname)
+
+if [ -z "$1" ]; then
+    echo "Current hostname: $CURRENT_HOSTNAME"
+    echo "mDNS address:   $CURRENT_HOSTNAME.local"
+    echo ""
+    read -p "Enter new hostname (default: $CURRENT_HOSTNAME): " NEW_HOSTNAME
+    NEW_HOSTNAME=${NEW_HOSTNAME:-$CURRENT_HOSTNAME}
+else
+    NEW_HOSTNAME=$1
+fi
+
+if [[ "$NEW_HOSTNAME" =~ [^a-zA-Z0-9-] ]]; then
+    echo "Error: Hostname contains invalid characters. Use only alphanumeric and hyphens."
+    exit 1
+fi
+
+echo "Setting hostname to: $NEW_HOSTNAME"
+hostnamectl set-hostname "$NEW_HOSTNAME"
+
+echo ""
+echo "mDNS preview: $NEW_HOSTNAME.local"
+echo "Warning: mDNS (.local) conflicts can occur if multiple devices on the same network share the same hostname."
