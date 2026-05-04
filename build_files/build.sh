@@ -3,13 +3,15 @@
 set -ouex pipefail
 
 ### Install DE and other core packages
+# Install Plasma Wayland and LXQt
 dnf groupinstall -y "LXQt Desktop" \
-  && dnf install -y network-manager-applet \
+  && dnf install -y network-manager-applet plasma-workspace-wayland labwc wayvnc greetd \
   && dnf clean all
 
 
 ### Install server packages
-dnf5 install -y tmux openssh-server nginx nodejs npm python3 python3-pip gcc gcc-c++ make tigervnc-server initial-setup-gui anaconda-widgets
+# Wayland-first server tools
+dnf5 install -y tmux openssh-server nginx nodejs npm python3 python3-pip gcc gcc-c++ make initial-setup-gui anaconda-widgets
 
 #### Example for enabling a System Unit File
 systemctl enable podman.socket sshd
@@ -22,7 +24,7 @@ git clone https://github.com/novnc/noVNC.git
 git clone https://github.com/novnc/websockify.git
 ln -s /var/local/noVNC/vnc.html /var/local/noVNC/index.html
 
-# noVNC systemd service (standalone proxy)
+# noVNC systemd service
 cat << 'EOF' > /etc/systemd/system/novnc.service
 [Unit]
 Description=noVNC proxy
@@ -40,35 +42,6 @@ EOF
 # Common installs
 rpm-ostree install podman podman-compose tailscale cockpit-system cockpit-ostree cockpit-podman cockpit-storaged nginx bind-utils procps-ng jq
 
-# What about replacing firewall-cmd with direct firewalld config files?
-rm -f /etc/firewalld/services/{ssh,cockpit,guac}.xml
-cat << 'EOF' > /etc/firewalld/services/ssh.xml
-<?xml version="1.0" encoding="utf-8"?>
-<service version="1.0">
-  <short>SSH</short>
-  <description>Secure Shell protocol</description>
-  <port protocol="tcp" port="22"/>
-</service>
-EOF
-
-cat << 'EOF' > /etc/firewalld/services/cockpit.xml
-<?xml version="1.0" encoding="utf-8"?>
-<service version="1.0">
-  <short>Cockpit</short>
-  <description>Cockpit Web Service</description>
-  <port protocol="https" port="9090"/>
-</service>
-EOF
-
-cat << 'EOF' > /etc/firewalld/services/novnc.xml
-<?xml version="1.0" encoding="utf-8"?>
-<service version="1.0">
-  <short>noVNC</short>
-  <description>noVNC WebSocket proxy</description>
-  <port protocol="tcp" port="6080"/>
-</service>
-EOF
-
 # Direct firewall rules
 cat << EOF > /etc/firewalld/direct.xml
 <direct>
@@ -80,19 +53,44 @@ cat << EOF > /etc/firewalld/direct.xml
 </direct>
 EOF
 
+# Unified KWin-based Wayland VNC Server
+# KWin provides the compositor AND the VNC server in one native stack
+cat << 'EOF' > /usr/bin/nasy-vnc-server
+#!/bin/bash
+source /etc/switch-session.conf
+export XDG_RUNTIME_DIR=/run/user/0
+mkdir -p $XDG_RUNTIME_DIR
+
+if [[ "$SESSION" == "plasma" ]]; then
+    # Full Plasma Bigscreen experience
+    export PLASMA_SHELL_PACKAGE=org.kde.plasma.bigscreen
+    exec kwin_wayland --headless --vnc-port 5901 --width 1280 --height 720
+else
+    # Full LXQt Desktop experience on top of KWin
+    # KWin acts as the Wayland server, and we launch LXQt into it
+    kwin_wayland --headless --vnc-port 5901 --width 1280 --height 720 &
+    KWIN_PID=$!
+    
+    # Wait for the compositor to start
+    sleep 3
+    export WAYLAND_DISPLAY=wayland-0
+    lxqt-session &
+    
+    wait $KWIN_PID
+fi
+EOF
+chmod +x /usr/bin/nasy-vnc-server
+
 # VNC Server systemd unit
 cat << 'EOF' > /etc/systemd/system/vncserver.service
 [Unit]
-Description=Standalone VNC Server (Xvnc)
+Description=NASy-Peasy Wayland VNC Server (KWin)
 After=network.target
 
 [Service]
 Type=simple
-# Runs Xvnc on display :1 (port 5901).
-# Restricted to localhost with no password since noVNC proxies the connection.
-ExecStart=/usr/bin/Xvnc :1 -localhost yes -geometry 1280x720 -depth 24 -SecurityTypes None -AlwaysShared
-# The session is started via a separate service or script triggered by Xvnc or run separately
-ExecStartPost=/usr/bin/nasy-vnc-session
+# KWin's built-in VNC server is Wayland-native
+ExecStart=/usr/bin/nasy-vnc-server
 Restart=always
 User=root
 
@@ -100,21 +98,31 @@ User=root
 WantedBy=multi-user.target
 EOF
 
-# VNC Session Wrapper
-cat << 'EOF' > /usr/bin/nasy-vnc-session
+# Greetd Configuration
+mkdir -p /etc/greetd
+cat << 'EOF' > /etc/greetd/config.toml
+[default_session]
+command = "agreety --cmd /usr/bin/nasy-session-launcher"
+user = "greeter"
+
+[initial_session]
+command = "/usr/bin/nasy-session-launcher"
+user = "root"
+EOF
+
+# Session Launcher for Greetd (Pure Wayland via KWin)
+cat << 'EOF' > /usr/bin/nasy-session-launcher
 #!/bin/bash
-export DISPLAY=:1
 source /etc/switch-session.conf
 if [[ "$SESSION" == "plasma" ]]; then
     export PLASMA_SHELL_PACKAGE=org.kde.plasma.bigscreen
-    # Bigscreen is Wayland-first, but we can run it in X11 mode or use the shell
-    # For VNC (X11), we might need to start a standard Plasma session with the bigscreen shell
-    startplasma-x11
+    exec startplasma-wayland
 else
-    startlxqt
+    # Use KWin as the compositor for LXQt (replacing labwc)
+    exec kwin_wayland --xwayland --lxqt lxqt-session
 fi
 EOF
-chmod +x /usr/bin/nasy-vnc-session
+chmod +x /usr/bin/nasy-session-launcher
 
 # Tailscale repo
 cat << EOF > /etc/yum.repos.d/tailscale.repo
@@ -131,11 +139,8 @@ EOF
 # Install NAS-Dashboard
 mkdir -p /var/opt/nas-dashboard
 git clone https://github.com/sounddrill31/NAS-Dashboard.git /tmp/nas-dashboard
-# Run the installer from the temporary directory
 cd /tmp/nas-dashboard
 python3 install.py
-
-# Clean up temporary install files
 rm -rf /tmp/nas-dashboard
 
 # Tailscale auto-auth
@@ -145,20 +150,16 @@ cat << 'EOF' > /etc/systemd/system/tailscaled.service.d/authkey.conf
 ExecStartPost=/usr/bin/tailscale up --authkey=YOUR_AUTH_KEY --accept-routes
 EOF
 
-# Nginx config as reverse proxy
+# Nginx config
 mkdir -p /etc/nginx/conf.d
 cat << 'EOF' > /etc/nginx/conf.d/dashboard.conf
 server {
   listen 80;
-  
   location / {
     proxy_pass http://localhost:8000;
     proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
   }
-
   location /cockpit { return 301 https://$host:9090$request_uri; }
-  
   location /novnc/ {
     proxy_pass http://localhost:6080/;
     proxy_http_version 1.1;
@@ -170,13 +171,13 @@ server {
 EOF
 
 # Enable services
-systemctl enable nginx novnc vncserver nas-dashboard initial-setup
+systemctl enable nginx novnc vncserver nas-dashboard initial-setup greetd
 
 # Configure initial-setup
 mkdir -p /etc/initial-setup
 echo "gui" > /etc/initial-setup/reconfig
 
-# Install custom Anaconda Add-on (NASy-Peasy Spoke)
+# Install custom Anaconda Add-on
 mkdir -p /usr/share/anaconda/addons
 cp -r /ctx/build_files/nasy-addon/* /usr/share/anaconda/addons/
 
@@ -190,9 +191,8 @@ cp /ctx/bin/*.desktop /usr/share/applications/
 # Initialize session config
 echo "SESSION=lxqt" > /etc/switch-session.conf
 
-# Set hostname if specified
+# Set hostname
 if [ -f /ctx/build_files/hostname ]; then
     IMAGE_HOSTNAME=$(cat /ctx/build_files/hostname)
-    echo "Setting image hostname to: $IMAGE_HOSTNAME"
     echo "$IMAGE_HOSTNAME" > /etc/hostname
 fi
