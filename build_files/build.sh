@@ -54,30 +54,29 @@ cat << EOF > /etc/firewalld/direct.xml
 EOF
 
 # Unified KWin-based Wayland VNC Server
-# KWin provides the compositor AND the VNC server in one native stack
 cat << 'EOF' > /usr/bin/nasy-vnc-server
 #!/bin/bash
 source /etc/switch-session.conf
 export XDG_RUNTIME_DIR=/run/user/0
+export WAYLAND_DISPLAY=wayland-vnc
 mkdir -p $XDG_RUNTIME_DIR
 
+# Start headless KWin with built-in VNC
+kwin_wayland --headless --vnc-port 5901 --socket $WAYLAND_DISPLAY --width 1280 --height 720 &
+KWIN_PID=$!
+
+sleep 3
+
 if [[ "$SESSION" == "plasma" ]]; then
-    # Full Plasma Bigscreen experience
     export PLASMA_SHELL_PACKAGE=org.kde.plasma.bigscreen
-    exec kwin_wayland --headless --vnc-port 5901 --width 1280 --height 720
+    # Start the full Plasma session components
+    QT_QPA_PLATFORM=wayland /usr/bin/startplasma-wayland &
 else
-    # Full LXQt Desktop experience on top of KWin
-    # KWin acts as the Wayland server, and we launch LXQt into it
-    kwin_wayland --headless --vnc-port 5901 --width 1280 --height 720 &
-    KWIN_PID=$!
-    
-    # Wait for the compositor to start
-    sleep 3
-    export WAYLAND_DISPLAY=wayland-0
+    # Start the full LXQt session components
     lxqt-session &
-    
-    wait $KWIN_PID
 fi
+
+wait $KWIN_PID
 EOF
 chmod +x /usr/bin/nasy-vnc-server
 
@@ -89,7 +88,6 @@ After=network.target
 
 [Service]
 Type=simple
-# KWin's built-in VNC server is Wayland-native
 ExecStart=/usr/bin/nasy-vnc-server
 Restart=always
 User=root
@@ -118,7 +116,7 @@ if [[ "$SESSION" == "plasma" ]]; then
     export PLASMA_SHELL_PACKAGE=org.kde.plasma.bigscreen
     exec startplasma-wayland
 else
-    # Use KWin as the compositor for LXQt (replacing labwc)
+    # Use KWin as the compositor for LXQt
     exec kwin_wayland --xwayland --lxqt lxqt-session
 fi
 EOF
