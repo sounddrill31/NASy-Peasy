@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Switch to TV and Logout
+Comment=Switch to TV Mode (Plasma Bigscreen) and log out
+Exec=/usr/bin/nasy-switch-gui plasma
+Icon=video-display
+Type=Application
+Categories=System;Settings;
+OnlyShowIn=LXQt;
+Terminal=false

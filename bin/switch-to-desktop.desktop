@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Switch to Desktop and Logout
+Comment=Switch to Desktop Mode (LXQt) and log out
+Exec=/usr/bin/nasy-switch-gui lxqt
+Icon=computer
+Type=Application
+Categories=System;Settings;
+OnlyShowIn=KDE;
+Terminal=false

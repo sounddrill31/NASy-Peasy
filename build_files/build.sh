@@ -182,7 +182,10 @@ cp -r /ctx/build_files/nasy-addon/* /usr/share/anaconda/addons/
 
 # Install custom binaries
 cp /ctx/bin/* /usr/bin/
-chmod +x /usr/bin/switch-session /usr/bin/set-hostname
+chmod +x /usr/bin/switch-session /usr/bin/set-hostname /usr/bin/nasy-switch-gui
+
+# Install desktop entries
+cp /ctx/bin/*.desktop /usr/share/applications/
 
 # Initialize session config
 echo "SESSION=lxqt" > /etc/switch-session.conf

@@ -1,0 +1,28 @@
+#!/bin/bash
+# nasy-switch-gui: A full-screen GUI to switch between TV and Desktop modes
+
+TARGET=$1
+
+if [ -z "$TARGET" ]; then
+    echo "Usage: nasy-switch-gui {lxqt|plasma}"
+    exit 1
+fi
+
+if [ "$TARGET" == "lxqt" ]; then
+    TITLE="Switch to Desktop Mode"
+    TEXT="Would you like to switch to Desktop Mode (LXQt)?\n\nYou will be logged out to apply changes."
+    LABEL="Switch to Desktop and Logout"
+else
+    TITLE="Switch to TV Mode"
+    TEXT="Would you like to switch to TV Mode (Plasma Bigscreen)?\n\nYou will be logged out to apply changes."
+    LABEL="Switch to TV and Logout"
+fi
+
+# Show fullscreen zenity question
+if zenity --question --title="$TITLE" --text="$TEXT" --fullscreen --ok-label="$LABEL" --cancel-label="Stay Here"; then
+    # Use pkexec to get permissions for switch-session which writes to /etc
+    pkexec /usr/bin/switch-session set "$TARGET"
+    
+    # Terminate the current session to trigger the logout
+    loginctl terminate-user $USER
+fi
