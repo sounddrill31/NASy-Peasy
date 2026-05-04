@@ -4,7 +4,7 @@
 # Used for switching between LXQt and Plasma Bigscreen
 
 CONFIG_FILE="/etc/switch-session.conf"
-VNC_SERVICE="/etc/systemd/system/vncserver.service"
+SDDM_CONFIG="/etc/sddm.conf.d/nasy.conf"
 
 set_session() {
     local session=$1
@@ -13,10 +13,15 @@ set_session() {
     case "$session" in
         lxqt)
             echo "SESSION=lxqt" > "$CONFIG_FILE"
-            # Update VNC startup logic or xinitrc if necessary
+            # Update SDDM default
+            mkdir -p /etc/sddm.conf.d
+            echo -e "[Autologin]\nSession=nasy-lxqt.desktop" > "$SDDM_CONFIG"
             ;;
         plasma)
             echo "SESSION=plasma" > "$CONFIG_FILE"
+            # Update SDDM default
+            mkdir -p /etc/sddm.conf.d
+            echo -e "[Autologin]\nSession=plasmawayland.desktop" > "$SDDM_CONFIG"
             ;;
         *)
             echo "Unknown session: $session. Use 'lxqt' or 'plasma'."
@@ -30,14 +35,7 @@ set_session() {
 
 clean_apps() {
     echo "Isolating applications between DEs..."
-    
-    # We'll use a simple heuristic:
-    # 1. LXQt specific apps get OnlyShowIn=LXQt
-    # 2. KDE/Plasma specific apps get OnlyShowIn=KDE
-    
-    # Common KDE apps
     local kde_apps=("dolphin" "konsole" "systemsettings" "okular" "gwenview" "ark" "kate")
-    # Common LXQt apps
     local lxqt_apps=("pcmanfm-qt" "qterminal" "lxqt-config" "featherpad" "screengrab")
 
     for app in "${kde_apps[@]}"; do
@@ -56,9 +54,7 @@ patch_desktop() {
     local app_name=$1
     local de=$2
     local file
-    
     file=$(find /usr/share/applications -name "*${app_name}*.desktop" | head -n 1)
-    
     if [[ -n "$file" ]]; then
         echo "Patching $file for $de..."
         # Remove existing tags
