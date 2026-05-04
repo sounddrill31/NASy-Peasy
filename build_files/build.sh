@@ -11,7 +11,6 @@ dnf install -y \
     plasma-bigscreen \
     plasma-workspace-wayland \
     sddm \
-    sddm-wayland-plasma \
     network-manager-applet \
     labwc \
     wayvnc \
