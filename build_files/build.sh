@@ -16,8 +16,7 @@ dnf install -y \
     network-manager-applet \
     labwc \
     wayvnc \
-    zenity \
-    initial-setup-gui \
+    python3-websockify \
     anaconda-widgets \
     tmux \
     openssh-server \
@@ -43,7 +42,7 @@ echo "LANG=en_US.UTF-8" > /etc/locale.conf
 systemctl disable gdm greetd lightdm sddm || true
 systemctl enable --force plasmalogin
 
-# Configure Plasma Login Manager for autologin
+# Configure Plasma Login Manager for autologin (will be set by switch-session or initial-setup)
 mkdir -p /etc/plasmalogin.conf.d
 
 # Create the custom LXQt-on-KWin Wayland session
@@ -57,73 +56,63 @@ Type=Application
 DesktopNames=LXQt
 EOF
 
-systemctl set-default graphical.target
-systemctl enable podman.socket sshd nginx initial-setup
-
-### 3. Wayland VNC Server (Headless LabWC)
-cat << 'EOF' > /usr/bin/nasy-vnc-server
-#!/bin/bash
-source /etc/switch-session.conf
-export XDG_RUNTIME_DIR=/run/user/0
-export WAYLAND_DISPLAY=wayland-vnc
-mkdir -p $XDG_RUNTIME_DIR
-
-# Start labwc as the headless compositor with wayvnc
-labwc -s "wayvnc --render-node /dev/dri/renderD128 0.0.0.0 5901" &
-COMPOSITOR_PID=$!
-
-sleep 3
-
-if [[ "$SESSION" == "plasma" ]]; then
-    export PLASMA_SHELL_PACKAGE=org.kde.plasma.bigscreen
-    QT_QPA_PLATFORM=wayland /usr/bin/startplasma-wayland &
-else
-    # Start LXQt components
-    lxqt-session &
-fi
-
-wait $COMPOSITOR_PID
+# Create a dedicated Plasma Bigscreen session that forces the Bigscreen shell
+cat << 'EOF' > /usr/share/wayland-sessions/nasy-plasma-bigscreen.desktop
+[Desktop Entry]
+Name=NASy-Peasy Bigscreen (Plasma)
+Comment=Plasma Wayland with Bigscreen Shell
+Exec=env PLASMA_SHELL_PACKAGE=org.kde.plasma.bigscreen /usr/bin/startplasma-wayland
+Type=Application
+DesktopNames=KDE
 EOF
-chmod +x /usr/bin/nasy-vnc-server
 
-# VNC Server systemd unit
-cat << 'EOF' > /etc/systemd/system/vncserver.service
-[Unit]
-Description=NASy-Peasy Wayland VNC Server (KWin)
-After=network.target
+systemctl set-default graphical.target
+systemctl enable podman.socket sshd nginx
 
-[Service]
-Type=simple
-ExecStart=/usr/bin/nasy-vnc-server
-Restart=always
-User=root
-
-[Install]
-WantedBy=multi-user.target
+### 3. Professional Remote Desktop (Autostart wayvnc)
+# Instead of a manual background service, we let the session start the VNC server.
+# This ensures it shows exactly what the user sees on their "professional" PLM session.
+mkdir -p /etc/xdg/autostart
+cat << 'EOF' > /etc/xdg/autostart/nasy-vnc.desktop
+[Desktop Entry]
+Type=Application
+Name=NASy-Peasy VNC Server
+Exec=wayvnc 0.0.0.0 5901
+Icon=network-server
+Comment=Allow remote access to this session
+X-GNOME-Autostart-enabled=true
+OnlyShowIn=KDE;LXQt;
 EOF
 
 ### 4. Dashboards and Other Tools
 # Download noVNC
-mkdir -p /var/local
-cd /var/local
-git clone https://github.com/novnc/noVNC.git
-git clone https://github.com/novnc/websockify.git
-ln -s /var/local/noVNC/vnc.html /var/local/noVNC/index.html
+mkdir -p /var/local/novnc
+git clone https://github.com/novnc/noVNC.git /var/local/novnc
+ln -s /var/local/novnc/vnc.html /var/local/novnc/index.html
 
-# noVNC systemd service
+# Ensure the nobody user can access the web files and the parent directory
+chown -R nobody:nobody /var/local/novnc
+chmod 755 /var/local /var/local/novnc
+
+# noVNC systemd service using system websockify
 cat << 'EOF' > /etc/systemd/system/novnc.service
 [Unit]
 Description=noVNC proxy
-After=network.target vncserver.service
+After=network.target
 
 [Service]
-ExecStart=/var/local/websockify/run 6080 localhost:5901 --web=/var/local/noVNC
+ExecStart=/usr/bin/websockify 6080 localhost:5901 --web=/var/local/novnc
 Restart=always
 User=nobody
 
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# SELinux fixes for noVNC
+# Allow websockify to bind to its port and serve files
+semanage fcontext -a -t httpd_sys_content_t "/var/local/novnc(/.*)?" || true
+restorecon -Rv /var/local/novnc || true
 
 # Install NAS-Dashboard
 mkdir -p /var/opt/nas-dashboard
@@ -132,9 +121,10 @@ cd /tmp/nas-dashboard
 python3 install.py
 rm -rf /tmp/nas-dashboard
 
-# Configure Nginx as a reverse proxy for the dashboard
+# Configure Nginx as a unified reverse proxy
 mkdir -p /etc/nginx/default.d
-cat << 'EOF' > /etc/nginx/default.d/nas-dashboard.conf
+cat << 'EOF' > /etc/nginx/default.d/nasy-proxy.conf
+# NAS-Dashboard (Main UI)
 location / {
     proxy_pass http://localhost:8000;
     proxy_set_header Host $host;
@@ -142,17 +132,34 @@ location / {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
 }
+
+# noVNC (Remote Desktop)
+location /vnc/ {
+    proxy_pass http://localhost:6080/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "Upgrade";
+    proxy_set_header Host $host;
+    proxy_read_timeout 61s;
+    proxy_buffering off;
+}
 EOF
 
+# SELinux fixes for Nginx proxying
+# This boolean allows Nginx to connect to ANY backend port (8000, 6080, etc.)
+setsebool -P httpd_can_network_connect 1 || true
+
+# Label directories so Nginx can access them
+semanage fcontext -a -t httpd_sys_content_t "/var/opt/nas-dashboard(/.*)?" || true
+semanage fcontext -a -t httpd_sys_content_t "/var/local/novnc(/.*)?" || true
+restorecon -Rv /var/opt/nas-dashboard /var/local/novnc || true
+
 # Enable remaining services
-systemctl enable novnc vncserver nas-dashboard
+systemctl enable novnc nas-dashboard
 
 ### 5. Custom Integrations
-# Configure initial-setup
-mkdir -p /etc/initial-setup
-echo "gui" > /etc/initial-setup/reconfig
-
-# Install custom Anaconda Add-on
+# Install custom NASy-Peasy Anaconda Addon (for ISO Installation)
+# This will show the setup questions during the actual OS installation
 mkdir -p /usr/share/anaconda/addons
 cp -r /ctx/build_files/nasy-addon/* /usr/share/anaconda/addons/
 

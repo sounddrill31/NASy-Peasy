@@ -2,15 +2,19 @@ import subprocess
 import os
 from pyanaconda.ui.gui.spokes import NormalSpoke
 from pyanaconda.ui.common import FirstbootSpokeMixIn
-from pyanaconda.ui.gui.categories.software import SoftwareCategory
+from pyanaconda.ui.gui.categories.system import SystemCategory
 from pyanaconda.i18n import _
 
 class NasySetupSpoke(FirstbootSpokeMixIn, NormalSpoke):
     mainWidgetName = "nasy_window"
     uiFile = "nasy.glade"
-    category = SoftwareCategory
+    category = SystemCategory
     icon = "preferences-system-symbolic"
     title = _("NASY-PEASY SETUP")
+
+    @classmethod
+    def should_run(cls, environment, data):
+        return True
 
     def __init__(self, data, storage, payload):
         NormalSpoke.__init__(self, data, storage, payload)

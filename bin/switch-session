@@ -10,18 +10,27 @@ set_session() {
     local session=$1
     echo "Setting default session to: $session"
     
+    # Dynamically find the first real user (UID 1000+)
+    local real_user
+    real_user=$(awk -F: '$3 >= 1000 && $3 < 60000 {print $1}' /etc/passwd | head -n 1)
+    
+    if [[ -z "$real_user" ]]; then
+        echo "No real user found. Autologin will be skipped until a user is created."
+        return
+    fi
+    
     case "$session" in
         lxqt)
             echo "SESSION=lxqt" > "$CONFIG_FILE"
             # Update PLM default
             mkdir -p /etc/plasmalogin.conf.d
-            echo -e "[Autologin]\nUser=root\nSession=nasy-lxqt.desktop" > "$PLM_CONFIG"
+            echo -e "[Autologin]\nUser=$real_user\nSession=nasy-lxqt.desktop" > "$PLM_CONFIG"
             ;;
         plasma)
             echo "SESSION=plasma" > "$CONFIG_FILE"
             # Update PLM default
             mkdir -p /etc/plasmalogin.conf.d
-            echo -e "[Autologin]\nUser=root\nSession=plasmawayland.desktop" > "$PLM_CONFIG"
+            echo -e "[Autologin]\nUser=$real_user\nSession=nasy-plasma-bigscreen.desktop" > "$PLM_CONFIG"
             ;;
         *)
             echo "Unknown session: $session. Use 'lxqt' or 'plasma'."
